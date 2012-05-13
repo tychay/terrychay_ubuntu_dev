@@ -7,6 +7,10 @@
 # To use, start with a vanilla install of ubuntu server, drop this in and run
 # $ ./install
 
+SUDO='sudo'
+HOSTNAME="terrychay-dev"
+CONFIG_DIR="/media/psf/terrychay-dev/configs"
+
 # functions {{{
 check_dpkg() { dpkg -l $1 | grep ^ii | wc -l; }
 is_eth0() { ifconfig | grep eth0 | wc -l; }
@@ -49,23 +53,23 @@ pecl_update_or_install () {
 # }}}
 # }}}
 # Set up environment ($EDITOR) {{{
-SUDO='sudo'
 #DO_UPGRADE='1' #Set this to upgrade
 if [ !$EDITOR ]; then
-	echo -n "Choose your preferred editor: "
+	echo -n "### Choose your preferred editor: "
 	read EDITOR
 	EDITOR=`which ${EDITOR}`
 fi
-if [ $EDITOR == '' ]; then
+if [ $EDITOR = '' ]; then
 	EDITOR="/usr/bin/pico"
 fi
 # }}}
-# {{{ $1 = HOSTNAME
-if [ $1 ]; then
-	HOSTNAME=$1
-else
-	echo -n "### If you wish to change the hostname (cloned an instance), please type in subdomain name: "
-	read HOSTNAME
+# $2 = CONFIG_DIR {{{
+if [ $2 ]; then
+	CONFIG_DIR=$2
+fi
+if [ ! $CONFIG_DIR ]; then
+	echo -n "### Set directory to store configs: "
+	read CONFIG_DIR
 fi
 # }}}
 # Fix broken networking on clone {{{
@@ -97,6 +101,7 @@ HOSTNAME=`cat /etc/hostname`
 # }}}
 IP_ADDRESS=`get_ip`
 echo "### Your IP address is ${IP_ADDRESS}"
+$SUDO apt-get update
 # Install LAMP {{{
 # http://www.howtoforge.com/ubuntu_lamp_for_newbies
 if [ `check_dpkg apache2` = 0 ]; then
@@ -176,6 +181,9 @@ if [ `check_dpkg curl` ]; then
 	$SUDO apt-get install curl
 fi
 pecl_update_or_install curl curl php5-curl
+# }}}
+# Install intl {{{
+pecl_update_or_install intl intl php5-intl
 # }}}
 # Install APC {{{
 pecl_update_or_install apc apc-beta php-apc
@@ -281,257 +289,46 @@ if [ ! -d build/${XHPROF_GUI} ]; then
 fi
 # TODO: install xhprof gui (a la phpmyadmin)
 # }}}
-# Install V8JS and extension {{{
-# http://css.dzone.com/articles/running-javascript-inside-php
-# TODO: -enable-memcached-igbinary (in php-pecl-memcached)
-if [ `check_dpkg libv8-dev` = 0 ]; then
-	echo "### Installing V8 library..."
-	$SUDO apt-get install libv8-dev libv8-dbg
-fi
-pecl_update_or_install v8js v8js-beta
-# }}}
 # TODO: Webgrind
+
+# Move configs magic {{{
+if [ ! -d $CONFIG_DIR ]; then
+	echo -n "### If you wish to change the hostname (cloned an instance), please type in subdomain name: "
+	mkdir $CONFIG_DIR
+fi
+# php config directory {{{
+pushd /etc/php5
+	if [ ! -d $CONFIG_DIR/phpconf.d ]; then
+		cp -r conf.d $CONFIG_DIR/phpconf.d
+	fi
+	pushd cli
+		$SUDO rm conf.d
+		$SUDO ln -s $CONFIG_DIR/phpconf.d conf.d
+	popd
+	pushd apache2
+		$SUDO rm conf.d
+		$SUDO ln -s $CONFIG_DIR/phpconf.d conf.d
+	popd
+# }}}
+# apache config directory {{{
+pushd /etc/apache2
+	if [ ! -d $CONFIG_DIR/apache2.d ]; then
+		cp -r sites-enabled $CONFIG_DIR/apache2.d
+	fi
+	if [ ! -h post-load ]; then
+		ln -s 
+		$SUDO ln -s $CONFIG_DIR/apache2.d post-load
+	fi
+	if [ ! -f apache2.conf.orig ]; then
+		$SUDO mv apache2.conf apache2.conf.orig
+		$SUDO cat apache2.conf.orig | sed "s|sites-enabled|post-load|" | $SUDO tee apache2.conf
+	fi
+# }}}
+# }}}
+
 if [ "$PACKAGES_INSTALLED" ]; then
 	echo '### You may need to add stuff to your $PHP_INI (or /etc/php.d/) and restart'
 	echo "###  $PACKAGES_INSTALLED"
 fi
 $SUDO service apache2 graceful
 exit
-
-
-
-# Ubuntu/Debian: {{{
-if [ $DISTRIBUTION = 'ubuntu' ]; then
-	check_dpkg() { dpkg -l $1 | grep ^ii | wc -l; }
-	# Set path to libmemcached (to use php-memcached instead of php-memcache)
-	LIBMEMCACHED=/usr
-	# ubuntu has separate ini files for apache vs. cli.
-	PHP_INI=/etc/php5/apache2/php.ini
-	# build environment for installing on ubuntu
-	if [ $DO_UPGRADE ]; then
-		$SUDO apt-get update
-	fi
-	# Need libpcre3-dev to compile APC
-	if [ `check_dpkg libpcre3-dev` ]; then
-		$SUDO apt-get install libpcre3-dev
-	fi
-	# Need curl to grab packages
-	# Needed to unzip YUI packages
-	# Needed to execute YUI compressor
-	if [ `check_dpkg default-jre` ]; then
-		$SUDO apt-get install default-jre
-	fi
-	echo "### REMEMBER! On ubuntu, there are two different directories for CLI PHP and APACHE2 PHP configuration. Both must be updated for this script to work properly"
-fi
-# }}}
-# shell function declarations {{{
-# {{{  pear_update_or_install()
-# $1 = package name
-# $2 = package name in pear (may have -beta or the like)
-# $3 = pear channel
-pear_update_or_install () {
-	if [ $2 ]; then
-		pkg_path=$2;
-	else
-		pkg_path=$1;
-	fi
-	if [ `pear_installed $1` ]; then
-		echo "### UPGRADING $1...";
-		$SUDO pear upgrade $pkg_path
-	else
-		echo "### INSTALLING $1";
-		if [ $3 ]; then
-			$SUDO pear channel-discover $3
-		fi
-		$SUDO pear install $pkg_path
-	fi
-}
-# }}}
-# }}}
-# UTILS {{{
-PHP_VERSION_TEST=$BASE_DIR/bs/version_compare.php
-# }}}
-# PACKAGES {{{
-# php extensions {{{
-# RUNKIT {{{
-#RUNKIT='runkit'
-# Runkit is still in beta.
-# New version at https://github.com/zenovich/runkit/
-RUNKIT='channel://pecl.php.net/runkit-0.9'
-# Note that Runkit 0.9 doesn't compile in PHP 5.2+
-if [ `$PHP_VERSION_TEST 5.2` ]; then
-	RUNKIT='cvs'
-fi
-# }}}
-# }}}
-# pear packages {{{
-#SAVANT='http://phpsavant.com/Savant3-3.0.0.tgz'
-#FIREPHP_CHANNEL='pear.firephp.org'
-#FIREPHP='FirePHPCore'
-#PHPDOC='PhpDocumentor'
-# }}}
-# downloads {{{
-# YUI & YUI compressor {{{
-YUI='yui'
-YUI_VERSION='2.9.0'
-YUI_BIN="yui_${YUI_VERSION}"
-YUI_PKG="${YUI_BIN}.zip"
-#YUI_URL="http://yuilibrary.com/downloads/yui2/${YUI_PKG}"
-YUI_URL="http://yui.zenfs.com/releases/yui2/${YUI_PKG}"
-
-YUIC='yuicompressor'
-YUIC_VERSION='2.4.7'
-YUIC_BIN="${YUIC}-${YUIC_VERSION}"
-YUIC_PKG="${YUIC_BIN}.zip"
-#YUIC_URL="http://www.julienlecomte.net/yuicompressor/${YUIC_PKG}"
-YUIC_URL="http://yui.zenfs.com/releases/yuicompressor/${YUIC_PKG}"
-# }}}
-# WEBGRIND {{{
-WEBGRIND='webgrind'
-WEBGRIND_VERSION='1.0'
-WEBGRIND_BIN="${WEBGRIND}-release-${WEBGRIND_VERSION}"
-WEBGRIND_PKG="${WEBGRIND_BIN}.zip"
-WEBGRIND_URL="http://webgrind.googlecode.com/files/${WEBGRIND_PKG}"
-# }}}
-# RUNKIT {{{
-RUNKIT='runkit'
-RUNKIT_VERSION='1.0.3'
-RUNKIT_DIR="${RUNKIT}-${RUNKIT_VERSION}"
-RUNKIT_PKG="${RUNKIT_DIR}.tgz"
-RUNKIT_URL="https://github.com/downloads/zenovich/runkit/${RUNKIT_PKG}"
-# }}}
-# }}}
-# }}}
-# Make directories {{{
-if [ ! -d packages ]; then
-	mkdir packages
-fi
-if [ ! -d build ]; then
-	mkdir build
-fi
-# }}}
-# Install/update PEAR {{{
-if [ `which pear` ]; then
-	$SUDO pear config-set php_bin $PHP
-	if [ $DO_UPGRADE ]; then
-		$SUDO pear list-upgrades
-		if [ $DISTRIBUTION = 'fedora' ]; then
-			$SUDO pear uninstall apc
-			$SUDO pear uninstall memcache
-		fi
-		$SUDO pear upgrade-all
-		$SUDO pear channel-update pear.php.net
-		$SUDO pear channel-update pecl.php.net
-	fi
-else
-	$SUDO $PHP -q bs/go-pear.php
-fi
-if [ `which pecl` ]; then
-	$SUDO pear config-set php_ini $PHP_INI
-	$SUDO pecl config-set php_ini $PHP_INI
-fi
-# }}}
-# Install big_int {{{ http://pecl.php.net/package/big_int
-#pecl_update_or_install big_int big_int
-# BUG: Cannot find config.m4 (in big_int-1.0.7)
-if [ `$PHP_EXT_TEST big_int` ]; then
-	if [ $DO_UPGRADE ]; then
-		echo "### No way to hande upgrading with big_int currently"
-	fi
-else
-	#$SUDO pecl install $2
-	pushd packages
-		$SUDO pecl download big_int
-		tar zxf big_int-*.tgz
-		pushd big_int-*
-			phpize
-			chmod a+x configure
-			./configure
-			make
-			sudo make install
-		popd
-	popd
-	echo "### Be sure to add to your php.ini: extension=$1.so"
-	PACKAGES_INSTALLED="big_int $PACKAGES_INSTALLED"
-fi
-#echo "### big_int..."
-#if [ `$PHP_EXT_TEST big_int` ]; then
-#	$SUDO pecl upgrade big_int
-#else
-#	$SUDO pecl install big_int
-#fi
-# }}}
-# Install mailparse {{{
-# Needed fr parsing RFC822 e-mails
-pecl_update_or_install mailparse mailparse php-pecl-mailparse php5-mailparse
-# }}}
-# Install PEAR packages: {{{ Savant, FirePHP, PhpDocumentor
-# Old download was: SAVANT='http://phpsavant.com/Savant3-3.0.0.tgz'
-# Old Savant PEAR repository   $SUDO pear channel-discover savant.pearified.com
-$SUDO pear channel-discover phpsavant.com
-pear_update_or_install Savant3 savant/Savant3 phpsavant.com
-#echo '### NB: There is a bug in Savant PHP Fatal error:  Method Savant3::__tostring() cannot take arguments in /usr/share/pear/Savant3.php on line 241'
-$SUDO pear channel-discover pear.firephp.org
-pear_update_or_install FirePHPCore firephp/FirePHPCore pear.firephp.org
-pear_update_or_install PhpDocumentor
-# }}}
-# FRAMEWORK: Install YUI && YUI Compressor {{{
-pushd packages
-	if [ ! -f ${YUI_PKG} ]; then
-		echo "### Downloading $YUI_URL..."
-		curl -O $YUI_URL;
-	fi
-	if [ ! -f ${YUIC_PKG} ]; then
-		echo "### Downloading $YUIC_URL..."
-		curl -O $YUIC_URL;
-	fi
-popd
-pushd build
-	if [ ! -d yui ]; then
-		echo "### Unpacking ${YUI_PKG}..."
-		unzip $BASE_DIR/packages/${YUI_PKG}
-	fi
-	if [ ! -d ${YUIC_BIN} ]; then
-		echo "### Unpacking ${YUIC_PKG}..."
-		unzip $BASE_DIR/packages/${YUIC_PKG}
-	fi
-popd
-pushd framework/res
-	if [ ! -f ${YUIC_BIN}.jar ]; then
-		echo "### INSTALLING ${YUIC_BIN}.jar..."
-		cp $BASE_DIR/build/$YUIC_BIN/build/${YUIC_BIN}.jar .
-	fi
-popd
-pushd samples/www/m/res
-	if [ ! -d yui ]; then
-		mkdir yui
-	fi
-	if [ ! -d yui/${YUI_VERSION} ]; then
-		echo "### INSTALLING yui/${YUI_VERSION}..."
-		mv $BASE_DIR/build/yui ./yui/${YUI_VERSION}
-	fi
-popd
-# }}}
-# SAMPLES: Install WebGrind {{{
-pushd packages
-	if [ ! -f ${WEBGRIND_PKG} ]; then
-		echo "### Downloading $WEBGRIND_URL..."
-		curl -O $WEBGRIND_URL;
-	fi
-popd
-pushd samples/www
-	if [ ! -d ${WEBGRIND} ]; then
-		echo "### Unpacking ${WEBGRIND_PKG}..."
-		unzip $BASE_DIR/packages/${WEBGRIND_PKG}
-	fi
-	pushd $WEBGRIND
-		if [ ! -f .htaccess ]; then
-			cp ../../res/webgrind.htaccess .htaccess
-			echo "### Update profilerDir to point to $BASE_DIR/samples/traces"
-			vim +20 config.php
-		fi
-	popd
-popd
-# }}}
-#echo "### Running phpdoc"
-#./bs/phpdoc.sh
