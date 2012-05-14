@@ -325,10 +325,14 @@ if [ ! -d $WORDPRESS_DIR ]; then
 	echo "### Syncing over wordpress htdocs..."
 	rsync -az -e "ssh -i ${SSH_KEY}" ${BITNAMI_ADDR}:${BITNAMI_WORDPRESS_HTDOCS} ${DEV_DIR}/wordpress
 fi
-# symlinks broken :-(
+# symlinks break in parallels filesystem :-(
 if [ ! -f $WORDPRESS_DIR/wordpress/htdocs/wp-content/sunrise.php ]; then
 	echo "### Fixing broken symlink (sunrise.php for domain mapping)..."
 	cp $WORDPRESS_DIR/wordpress/htdocs/wp-content/mu-plugins/wordpress-mu-domain-mapping/sunrise.php $WORDPRESS_DIR/wordpress/htdocs/wp-content/sunrise.php
+fi
+if [ ! -f $WORDPRESS_DIR/wordpress/htdocs/wp-content/mu-plugins/domain_mapping.php ]; then
+	echo "### Fixing broken symlink (domain_mapping.php for domain mapping)..."
+	cp $WORDPRESS_DIR/wordpress/htdocs/wp-content/mu-plugins/wordpress-mu-domain-mapping/domain_mapping.php $WORDPRESS_DIR/wordpress/htdocs/wp-content/mu-plugins/domain_mapping.php
 fi
 # }}}
 # set up ssh tunnel to mysqld {{{
