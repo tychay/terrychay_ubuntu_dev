@@ -323,7 +323,7 @@ fi
 # http://troy.jdmz.net/rsync/index.html
 if [ ! -d $WORDPRESS_DIR ]; then
 	echo "### Syncing over wordpress htdocs..."
-	rsync -az -e "ssh -i ${SSH_KEY}" ${BITNAMI_ADDR}:${BITNAMI_WORDPRESS_HTDOCS} ${DEV_DIR}/wordpress
+	rsync -avz -e "ssh -i ${SSH_KEY}" ${BITNAMI_ADDR}:${BITNAMI_WORDPRESS_HTDOCS} ${DEV_DIR}/wordpress
 fi
 # symlinks break in parallels filesystem :-(
 if [ ! -f $WORDPRESS_DIR/wp-content/sunrise.php ]; then
@@ -372,7 +372,7 @@ read IGNORE
 #$SUDO ln -s /etc/phpmyadmin
 if [ ! -d $PHPMYADMIN_DIR ]; then
 	echo "### Syncing over phpmyadmin htdocs..."
-	rsync -az -e "ssh -i ${SSH_KEY}" ${BITNAMI_ADDR}:${BITNAMI_PHPMYADMIN_HTDOCS} ${DEV_DIR}/phpmyadmin
+	rsync -avz -e "ssh -i ${SSH_KEY}" ${BITNAMI_ADDR}:${BITNAMI_PHPMYADMIN_HTDOCS} ${DEV_DIR}/phpmyadmin
 fi
 if [ `grep localhost ${PHPMYADMIN_DIR}/config.inc.php` ]; then
 	echo "### repairing the config file for phpmyadmin..."
