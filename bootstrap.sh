@@ -9,13 +9,24 @@
 
 SUDO='sudo'
 HOSTNAME="terrychay-dev"
-CONFIG_DIR="/media/psf/terrychay-dev/configs"
+EMAIL="tychay@php.net"
+DEV_DIR="/media/psf/terrychay-dev"
+CONFIG_DIR="${DEV_DIR}/configs"
+SSH_KEY="/media/psf/terrychay-dev/key.pem"
+BITNAMI_ADDR="bitnami@terrychay.bitnamiapp.com"
+BITNAMI_WORDPRESS_HTDOCS="/home/bitnami/apps/wordpress/htdocs"
+BITNAMI_PHPMYADMIN_HTDOCS="/home/bitnami/apps/phpmyadmin/htdocs"
+WORDPRESS_DIR="${DEV_DIR}/wordpress/htdocs"
+PHPMYADMIN_DIR="${DEV_DIR}/phpmyadmin/htdocs"
+BITNAMI_PHPMYADMIN_CONFIG="/home/bitnami/apps/phpmyadmin/htdocs/config.inc.php"
+MYSQL_PORT="3306"
 
 # functions {{{
 check_dpkg() { dpkg -l $1 | grep ^ii | wc -l; }
 is_eth0() { ifconfig | grep eth0 | wc -l; }
 get_ip() { ifconfig | grep 'inet addr' |  awk -F: '{ print $2 }' | awk '{ print $1 }' | grep -v 127.0.0.1; }
-pear_installed () { pear list -a | grep ^$1 | wc -l ; }
+pear_installed() { pear list -a | grep ^$1 | wc -l ; }
+test_port() { netstat -pln | grep :$1 | wc -l;  }
 PHP_EXT_TEST=./extension_installed.php
 # {{{  pecl_update_or_install()
 # $1 = package name
@@ -101,6 +112,7 @@ HOSTNAME=`cat /etc/hostname`
 # }}}
 IP_ADDRESS=`get_ip`
 echo "### Your IP address is ${IP_ADDRESS}"
+echo "### Updating apt-get (control-c to skip)..."
 $SUDO apt-get update
 # Install LAMP {{{
 # http://www.howtoforge.com/ubuntu_lamp_for_newbies
@@ -158,6 +170,7 @@ PACKAGES_INSTALLED=""
 if [ ! -d 'build' ]; then
 	mkdir build
 fi
+# Install key packages {{{
 # Install Git {{{
 # Needed to generate version numbers and sync git repositories
 if [ `check_dpkg git` ]; then
@@ -174,6 +187,13 @@ if [ `check_dpkg zip` ]; then
 fi
 pecl_update_or_install curl curl php5-curl
 # }}}
+# Install ack-grep {{{
+# Assist in searching in developmetn
+if [ `check_dpkg ack-grep` ]; then
+	echo "### Installing ack-grep..."
+	$SUDO apt-get install ack-grep
+fi
+# }}}
 # Install curl {{{
 # Need curl to grab downloads
 if [ `check_dpkg curl` ]; then
@@ -181,6 +201,13 @@ if [ `check_dpkg curl` ]; then
 	$SUDO apt-get install curl
 fi
 pecl_update_or_install curl curl php5-curl
+# }}}
+# }}}
+# Install PHP and Apache extensions {{{
+# turn on mod_rewrite {{{
+# http://troy.jdmz.net/rsync/index.html
+echo "### Turning on mod_rewrite in apache (needed for wordpress MU domains)..."
+$SUDO a2enmod rewrite
 # }}}
 # Install intl {{{
 pecl_update_or_install intl intl php5-intl
@@ -290,13 +317,68 @@ fi
 # TODO: install xhprof gui (a la phpmyadmin)
 # }}}
 # TODO: Webgrind
-
-# Move configs magic {{{
+# }}}
+# Set up webserver with remote {{{
+# sync wordpress htdocs over {{{
+# http://troy.jdmz.net/rsync/index.html
+if [ ! -d $WORDPRESS_DIR ]; then
+	echo "### Syncing over wordpress htdocs..."
+	rsync -az -e "ssh -i ${SSH_KEY}" ${BITNAMI_ADDR}:${BITNAMI_WORDPRESS_HTDOCS} ${DEV_DIR}/wordpress
+fi
+# symlinks broken :-(
+if [ ! -f $WORDPRESS_DIR/wordpress/htdocs/wp-content/sunrise.php ]; then
+	echo "### Fixing broken symlink (sunrise.php for domain mapping)..."
+	cp $WORDPRESS_DIR/wordpress/htdocs/wp-content/mu-plugins/wordpress-mu-domain-mapping/sunrise.php $WORDPRESS_DIR/wordpress/htdocs/wp-content/sunrise.php
+fi
+# }}}
+# set up ssh tunnel to mysqld {{{
+# turn off mysql: http://askubuntu.com/questions/40072/how-to-stop-apache2-mysql-from-starting-automatically-as-computer-starts
+if [ ! -f /etc/init/mysql.override ]; then
+	echo "### Turning off startup of mysqld..."
+	echo "manual" | $SUDO tee /etc/init/mysql.override
+fi
+$SUDO /etc/init.d/mysql stop
+if [ test_port 3306 != '0' ]; then
+	echo "### Turning on port forwarding for mysql"
+	ssh -N -L ${MYSQL_PORT}:127.0.0.1:${MYSQL_PORT} -i ${SSH_KEY} ${BITNAMI_ADDR} &
+fi
+#echo "### Turning on stunnel for mysql"
+#if [ `check_dpkg stunnel` ]; then
+#	echo "### Installing stunnel..."
+#	$SUDO apt-get install stunnel
+#fi
+# http://www.kutukupret.com/2009/09/20/securing-mysql-traffic-with-stunnel/
+# https://www.siamnet.org/Wiki/Ubuntu-SettingUpStunnel
+# http://www.edna.narrabilis.com/2006/06/01/stunnel-for-mysql-server-and-client/
+#cp ... /etc/stunnel/stunnel.conf
+#vim /etc/default/stunnel4 (sed /ENABLED=0/ENABLED=1/)
+# /etc/init.d/stunnel4 restart
+netstat -pln | grep :3306
+echo -n "### Tunnel infomation above:"
+read IGNORE
+# }}}
+# phpmyadmin  {{{
+# http://sourceforge.net/projects/phpmyadmin/forums/forum/72909/topic/3697310
+#cp /etc/phpmyadmin/apache.conf ${CONFIG_DIR}/apache2.d/phpmyadmin.conf
+#$SUDO mv /etc/phpmyadmin/config-db.php /etc/phpmyadmin/config-db.php.local
+#$SUDO ln -s /etc/phpmyadmin
+if [ ! -d $PHPMYADMIN_DIR ]; then
+	echo "### Syncing over phpmyadmin htdocs..."
+	rsync -az -e "ssh -i ${SSH_KEY}" ${BITNAMI_ADDR}:${BITNAMI_PHPMYADMIN_HTDOCS} ${DEV_DIR}/phpmyadmin
+fi
+if [ `grep localhost ${PHPMYADMIN_DIR}/config.inc.php` ]; then
+	echo "### repairing the config file for phpmyadmin..."
+	$SUDO cat ${PHPMYADMIN_DIR}/config.inc.php | sed "s|localhost|127.0.0.1|" > ${PHPMYADMIN_DIR}/config.inc.php
+fi
+# }}}
+# }}}
+# Move and set up configs {{{
 if [ ! -d $CONFIG_DIR ]; then
 	echo -n "### If you wish to change the hostname (cloned an instance), please type in subdomain name: "
 	mkdir $CONFIG_DIR
 fi
 # php config directory {{{
+echo "### Binding PHP configuration directory..."
 pushd /etc/php5
 	if [ ! -d $CONFIG_DIR/phpconf.d ]; then
 		cp -r conf.d $CONFIG_DIR/phpconf.d
@@ -309,8 +391,10 @@ pushd /etc/php5
 		$SUDO rm conf.d
 		$SUDO ln -s $CONFIG_DIR/phpconf.d conf.d
 	popd
+popd
 # }}}
 # apache config directory {{{
+echo "### Binding Apache configuration directory..."
 pushd /etc/apache2
 	if [ ! -d $CONFIG_DIR/apache2.d ]; then
 		cp -r sites-enabled $CONFIG_DIR/apache2.d
@@ -320,9 +404,22 @@ pushd /etc/apache2
 		$SUDO ln -s $CONFIG_DIR/apache2.d post-load
 	fi
 	if [ ! -f apache2.conf.orig ]; then
+		echo "### Reconfiguring apache to use new directory..."
 		$SUDO mv apache2.conf apache2.conf.orig
 		$SUDO cat apache2.conf.orig | sed "s|sites-enabled|post-load|" | $SUDO tee apache2.conf
 	fi
+popd
+# }}}
+# populate apache config {{{
+pwd
+if [ ! -f $CONFIG_DIR/apache2.d/wordpress.conf ]; then
+	echo "### Adding wordpress apache config..."
+	cat conf/wordpress.conf | sed "s|{{{HTDOCS_DIR}}}|${WORDPRESS_DIR}|" | sed "s|{{{EMAIL}}}|${EMAIL}|" > ${CONFIG_DIR}/apache2.d/wordpress.conf
+fi
+if [ ! -f $CONFIG_DIR/apache2.d/phpmyadmin.conf ]; then
+	echo "### Adding phpmyadmin apache config..."
+	cat conf/phpmyadmin.conf | sed "s|{{{HTDOCS_DIR}}}|${PHPMYADMIN_DIR}|" | sed "s|{{{EMAIL}}}|${EMAIL}|" > ${CONFIG_DIR}/apache2.d/phpmyadmin.conf
+fi
 # }}}
 # }}}
 

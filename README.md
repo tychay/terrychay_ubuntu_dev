@@ -70,6 +70,7 @@ Install (should be able to skip step):
 
 - `$ cd /usr/lib/parallels-tools`
 - `$ sudo ./install`
+- (repeat as necessary)
 
 ## Bind installer as shared folder
 
@@ -96,4 +97,23 @@ If you know what you are doing, you can modify the first few lines of
 	$ cd /media/psf/terrychay-ubuntu-dev
 	$ ./bootstrap.sh *new_hostname* *location of new config tree*
 
-## To do development
+## To do development (in espress)
+
+1. Make sure you have the bitnami key somewhere (same as "key.pem" above)
+2. Open Terminal (in /Applications/Utilites)
+3. Install and test the key (Control-C to get out)
+	$ ssh-add *path-to-key.pem1
+	$ sftp bitnami@terrychay.bitnamiapp.com
+	Connected to terrychay.bitnamiapp.com.
+	^CKilled by signal 15.
+4. Open Espresso
+5. Drag the "htdocs" folder (in wordpress) created in install above into workspace
+6. To Servers + Sync, add the bitnami server as "TerryChay BitNami"
+	- Protocol: SFTP
+	- Server: terrychay.bitnamiapp.com
+	- User Name: bitnami
+	- Password:
+	- Remote Path: /home/bitnami/apps/wordpress
+7. In Publish > TerryChay BitNami, click on the bgi cloud button
+8. Change to "sync". Try to sync. No changes should be synced
+
