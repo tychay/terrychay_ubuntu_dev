@@ -431,6 +431,12 @@ fi
 # }}}
 # }}}
 
+# Install binder {{{
+echo "### Installing script to restart tunnel restart_tunnel.sh"
+$SUDO cat restart_tunnel.sh | sed "s|{{SSH_KEY}}|${SSH_KEY} | sed "s|{{BITNAMI_ADDR}}|${BITNAMI_ADDR}| | sed "s|{{BITNAMI_PHPMYADMIN_CONFIG}}|${BITNAMI_PHPMYADMIN_CONFIG}| | sed "s|{{MYSQL_PORT}}|${MYSQL_PORT}|" > ~/restart_tunnel.sh
+chmod a+x ~/restart_tunnel.sh
+# }}}
+
 if [ "$PACKAGES_INSTALLED" ]; then
 	echo '### You may need to add stuff to your $PHP_INI (or /etc/php.d/) and restart'
 	echo "###  $PACKAGES_INSTALLED"

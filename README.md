@@ -97,23 +97,42 @@ If you know what you are doing, you can modify the first few lines of
 	$ cd /media/psf/terrychay-ubuntu-dev
 	$ ./bootstrap.sh *new_hostname* *location of new config tree*
 
-## To do development (in espress)
+## To test out the installation
+
+- Edit your host computer's `/etc/hosts` file (remember to have admin permissions)
+- Add an entry for the servers you want to mimic to point to the virtual machine instead of the Macintosh
+
+		10.211.55.7     terrychay terrychay.com thesimpli.st thesimplist.terrychay.com
+
+- Note that when not developing, comment out the line
+- Go to the server
+- If you want to connect to phpmyadmin, you can
+
+		http://terrychay/phpmyadmin/
+
+
+## To do development (in Espresso)
 
 1. Make sure you have the bitnami key somewhere (same as "key.pem" above)
 2. Open Terminal (in /Applications/Utilites)
 3. Install and test the key (Control-C to get out)
-	$ ssh-add *path-to-key.pem1
-	$ sftp bitnami@terrychay.bitnamiapp.com
-	Connected to terrychay.bitnamiapp.com.
-	^CKilled by signal 15.
+
+		$ ssh-add *path-to-key.pem1
+		$ sftp bitnami@terrychay.bitnamiapp.com
+		Connected to terrychay.bitnamiapp.com.
+		^CKilled by signal 15.
+
 4. Open Espresso
 5. Drag the "htdocs" folder (in wordpress) created in install above into workspace
 6. To Servers + Sync, add the bitnami server as "TerryChay BitNami"
+
 	- Protocol: SFTP
 	- Server: terrychay.bitnamiapp.com
 	- User Name: bitnami
 	- Password:
 	- Remote Path: /home/bitnami/apps/wordpress
+
+
 7. In Publish > TerryChay BitNami, click on the bgi cloud button
 8. Change to "sync". Try to sync. No changes should be synced
 

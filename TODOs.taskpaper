@@ -1,7 +1,10 @@
 - change script to build remote host @done(2012-05-13)
 - modify docs from scratch @done(2012-05-13)
-- get stunnel working
 - get phpmyadmin working @done(2012-05-13)
 - copy myadmin config from bitnami @done(2012-05-13)
 - set up directories and other stuff @done(2012-05-13)
+- make a script to restart the tunnel @done(2012-05-13)
+
+- make the restart of tunnel some sort of service?
+- get stunnel working
 
