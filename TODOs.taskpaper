@@ -4,6 +4,8 @@
 - copy myadmin config from bitnami @done(2012-05-13)
 - set up directories and other stuff @done(2012-05-13)
 - make a script to restart the tunnel @done(2012-05-13)
+- fix bug in restart tunnel script @done(2012-05-13)
+- make sure it doesn't try to start the tunnel twice @done(2012-05-13)
 
 - make the restart of tunnel some sort of service?
 - get stunnel working

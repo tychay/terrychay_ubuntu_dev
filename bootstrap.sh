@@ -63,6 +63,7 @@ pecl_update_or_install () {
 }
 # }}}
 # }}}
+
 # Set up environment ($EDITOR) {{{
 #DO_UPGRADE='1' #Set this to upgrade
 if [ !$EDITOR ]; then
@@ -338,6 +339,8 @@ if [ ! -f $WORDPRESS_DIR/wp-content/themes/twentytwelve ]; then
 	echo "### Fixing broken symlink (twentytwelve development)..."
 	cp -r $WORDPRESS_DIR/wp-content/themes/twentytwelve.dev/build $WORDPRESS_DIR/wp-content/themes/twentytwelve
 fi
+# Remove cache directories not in use
+rm -rf $WORDPRESS_DIR/wp-content/cache/*
 # }}}
 # set up ssh tunnel to mysqld {{{
 # turn off mysql: http://askubuntu.com/questions/40072/how-to-stop-apache2-mysql-from-starting-automatically-as-computer-starts
@@ -346,9 +349,12 @@ if [ ! -f /etc/init/mysql.override ]; then
 	echo "manual" | $SUDO tee /etc/init/mysql.override
 fi
 $SUDO /etc/init.d/mysql stop
-if [ test_port 3306 != '0' ]; then
+if [ `test_port 3306` != '0' ]; then
 	echo "### Turning on port forwarding for mysql"
 	ssh -N -L ${MYSQL_PORT}:127.0.0.1:${MYSQL_PORT} -i ${SSH_KEY} ${BITNAMI_ADDR} &
+	netstat -pln | grep :3306
+	echo -n "### Tunnel infomation above:"
+	read IGNORE
 fi
 #echo "### Turning on stunnel for mysql"
 #if [ `check_dpkg stunnel` ]; then
@@ -361,9 +367,6 @@ fi
 #cp ... /etc/stunnel/stunnel.conf
 #vim /etc/default/stunnel4 (sed /ENABLED=0/ENABLED=1/)
 # /etc/init.d/stunnel4 restart
-netstat -pln | grep :3306
-echo -n "### Tunnel infomation above:"
-read IGNORE
 # }}}
 # phpmyadmin  {{{
 # http://sourceforge.net/projects/phpmyadmin/forums/forum/72909/topic/3697310
@@ -432,9 +435,11 @@ fi
 # }}}
 
 # Install binder {{{
-echo "### Installing script to restart tunnel restart_tunnel.sh"
-$SUDO cat restart_tunnel.sh | sed "s|{{SSH_KEY}}|${SSH_KEY} | sed "s|{{BITNAMI_ADDR}}|${BITNAMI_ADDR}| | sed "s|{{BITNAMI_PHPMYADMIN_CONFIG}}|${BITNAMI_PHPMYADMIN_CONFIG}| | sed "s|{{MYSQL_PORT}}|${MYSQL_PORT}|" > ~/restart_tunnel.sh
-chmod a+x ~/restart_tunnel.sh
+if [ ! -f ~/restart_tunnel.sh ]; then
+	echo "### Installing script to restart tunnel restart_tunnel.sh"
+	$SUDO cat restart_tunnel.sh | sed "s|{{SSH_KEY}}|${SSH_KEY}|" | sed "s|{{BITNAMI_ADDR}}|${BITNAMI_ADDR}|" | sed "s|{{BITNAMI_PHPMYADMIN_CONFIG}}|${BITNAMI_PHPMYADMIN_CONFIG}|" | sed "s|{{MYSQL_PORT}}|${MYSQL_PORT}|" > ~/restart_tunnel.sh
+	chmod a+x ~/restart_tunnel.sh
+fi
 # }}}
 
 if [ "$PACKAGES_INSTALLED" ]; then
